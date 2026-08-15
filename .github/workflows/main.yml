@@ -37,96 +37,48 @@ jobs:
         echo "Found project directory at: $PROJECT_DIR"
         echo "dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
 
-    # Шаг 3: Создаем стабильный XML-интерфейс (Ошибка match_match исправлена на match_parent)
+    # Шаг 3: Создаем XML-интерфейс безопасным однострочным методом
     - name: Force Create Standard XML Layout
       run: |
         RES_DIR=$(find . -name "res" -type d | head -n 1)
         if [ -d "$RES_DIR" ]; then
           mkdir -p "$RES_DIR/layout"
-          cat << 'EOF' > "$RES_DIR/layout/activity_main.xml"
-          <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://android.com"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:gravity="center"
-              android:padding="16dp"
-              android:background="#121212">
-
-              <TextView
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:text="Horror Voice 3.0"
-                  android:textColor="#FF0000"
-                  android:textSize="28sp"
-                  android:layout_marginBottom="32dp"/>
-
-              <Button
-                  android:id="@+id/btn1"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:text="Страшный призрак"
-                  android:layout_marginTop="8dp"
-                  android:layout_marginBottom="8dp"/>
-
-              <Button
-                  android:id="@+id/btn2"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:text="Голос монстра"
-                  android:layout_marginTop="8dp"
-                  android:layout_marginBottom="8dp"/>
-
-              <Button
-                  android:id="@+id/btn3"
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:text="Эхо в подвале"
-                  android:layout_marginTop="8dp"
-                  android:layout_marginBottom="8dp"/>
-          </LinearLayout>
-          EOF
+          echo '<?xml version="1.0" encoding="utf-8"?><LinearLayout xmlns:android="http://android.com" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="center" android:padding="16dp" android:background="#121212"><TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Horror Voice 3.0" android:textColor="#FF0000" android:textSize="28sp" android:layout_marginBottom="32dp"/><Button android:id="@+id/btn1" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Страшный призрак" android:layout_marginTop="8dp" android:layout_marginBottom="8dp"/><Button android:id="@+id/btn2" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Голос монстра" android:layout_marginTop="8dp" android:layout_marginBottom="8dp"/><Button android:id="@+id/btn3" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Эхо в подвале" android:layout_marginTop="8dp" android:layout_marginBottom="8dp"/></LinearLayout>' > "$RES_DIR/layout/activity_main.xml"
         else
           echo "No res directory found!"
         fi
 
-    # Шаг 4: Переписываем MainActivity.kt на классический рабочий лад
+    # Шаг 4: Переписываем MainActivity.kt безопасным однострочным методом
     - name: Force Overwrite MainActivity.kt with Standard Code
       run: |
         TARGET_FILE=$(find . -name "MainActivity.kt" | head -n 1)
         if [ -f "$TARGET_FILE" ]; then
-          cat << 'EOF' > "$TARGET_FILE"
-          package com.horrorvoice.app
-
-          import android.os.Bundle
-          import android.widget.Button
-          import android.widget.Toast
-          import androidx.appcompat.app.AppCompatActivity
-
-          class MainActivity : AppCompatActivity() {
-              override fun onCreate(savedInstanceState: Bundle?) {
-                  super.onCreate(savedInstanceState: Bundle?)
-                  
-                  try {
-                      val layoutId = resources.getIdentifier("activity_main", "layout", packageName)
-                      if (layoutId != 0) {
-                          setContentView(layoutId)
-                          
-                          val btn1Id = resources.getIdentifier("btn1", "id", packageName)
-                          if (btn1Id != 0) {
-                              findViewById<Button>(btn1Id).setOnClickListener {
-                                  Toast.makeText(this, "Эффект Призрака запущен!", Toast.LENGTH_SHORT).show()
-                              }
-                          }
-                      } else {
-                          setContentView(android.R.layout.activity_list_item)
-                      }
-                  } catch (e: Exception) {
-                      setContentView(android.R.layout.activity_list_item)
-                  }
-              }
-          }
-          EOF
+          echo 'package com.horrorvoice.app' > "$TARGET_FILE"
+          echo 'import android.os.Bundle' >> "$TARGET_FILE"
+          echo 'import android.widget.Button' >> "$TARGET_FILE"
+          echo 'import android.widget.Toast' >> "$TARGET_FILE"
+          echo 'import androidx.appcompat.app.AppCompatActivity' >> "$TARGET_FILE"
+          echo 'class MainActivity : AppCompatActivity() {' >> "$TARGET_FILE"
+          echo '    override fun onCreate(savedInstanceState: Bundle?) {' >> "$TARGET_FILE"
+          echo '        super.onCreate(savedInstanceState)' >> "$TARGET_FILE"
+          echo '        try {' >> "$TARGET_FILE"
+          echo '            val layoutId = resources.getIdentifier("activity_main", "layout", packageName)' >> "$TARGET_FILE"
+          echo '            if (layoutId != 0) {' >> "$TARGET_FILE"
+          echo '                setContentView(layoutId)' >> "$TARGET_FILE"
+          echo '                val btn1Id = resources.getIdentifier("btn1", "id", packageName)' >> "$TARGET_FILE"
+          echo '                if (btn1Id != 0) {' >> "$TARGET_FILE"
+          echo '                    findViewById<Button>(btn1Id).setOnClickListener {' >> "$TARGET_FILE"
+          echo '                        Toast.makeText(this, "Эффект Призрака запущен!", Toast.LENGTH_SHORT).show()' >> "$TARGET_FILE"
+          echo '                    }' >> "$TARGET_FILE"
+          echo '                }' >> "$TARGET_FILE"
+          echo '            } else {' >> "$TARGET_FILE"
+          echo '                setContentView(android.R.layout.activity_list_item)' >> "$TARGET_FILE"
+          echo '            }' >> "$TARGET_FILE"
+          echo '        } catch (e: Exception) {' >> "$TARGET_FILE"
+          echo '            setContentView(android.R.layout.activity_list_item)' >> "$TARGET_FILE"
+          echo '        }' >> "$TARGET_FILE"
+          echo '    }' >> "$TARGET_FILE"
+          echo '}' >> "$TARGET_FILE"
         else
           echo "MainActivity.kt not found!"
         fi
