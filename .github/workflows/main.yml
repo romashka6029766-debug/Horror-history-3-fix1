@@ -25,7 +25,6 @@ jobs:
         cordova create my-app com.horrorvoice.app "Horror Voice 3.0"
         cd my-app
         cordova platform add android
-        # Включаем безопасную схему HTTPS для полной разблокировки микрофона в WebView
         sed -i 's/<content src="index.html" \/>/<content src="index.html" \/>\n    <preference name="AndroidScheme" value="https" \/>/' config.xml
 
     - name: Create Interface (HTML/CSS/JS)
@@ -96,7 +95,6 @@ jobs:
             <button class="btn" onclick="startRecording('monster')">ГОЛОС МОНСТРА</button>
             <button class="btn" onclick="startRecording('echo')">ЭХО В ПОДВАЛЕ</button>
 
-            <!-- Блок экспорта файла для CapCut -->
             <div id="saveBox" class="save-box">
                 <div class="status" style="color:#00ff00;">✨ Голос успешно изменен ИИ!</div>
                 <button class="btn btn-save" onclick="downloadAudioForCapCut()">📥 СОХРАНИТЬ В ПЛАНШЕТ ДЛЯ CAPCUT</button>
@@ -126,14 +124,12 @@ jobs:
 
                         mediaRecorder.onstop = async () => {
                             statusText.innerText = "🔮 ИИ обрабатывает аудио-поток...";
-                            
                             const rawBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
                             const arrayBuffer = await rawBlob.arrayBuffer();
                             
                             if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
                             
                             audioContext.decodeAudioData(arrayBuffer, async (audioBuffer) => {
-                                // Применяем эффекты изменения тона и генерируем новый измененный файл
                                 processAndCreateFile(audioBuffer, effectType);
                             });
                         };
@@ -142,25 +138,23 @@ jobs:
                         setTimeout(() => {
                             mediaRecorder.stop();
                             stream.getTracks().forEach(track => track.stop());
-                        }, 4000); // Пишем 4 секунды фразы
+                        }, 4000);
 
                     } catch (err) {
-                        statusText.innerText = "Ошибка. Перейдите в настройки планшета и включите доступ к МИКРОФОНУ для Horror Voice!";
+                        statusText.innerText = "Ошибка. Включите доступ к МИКРОФОНУ для Horror Voice в настройках планшета!";
                     }
                 }
 
                 function processAndCreateFile(buffer, type) {
-                    // Создаем офлайн-контекст для быстрой обработки и рендеринга файла в памяти
                     const offlineCtx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
                     const source = offlineCtx.createBufferSource();
                     source.buffer = buffer;
                     let lastNode = source;
 
-                    // Применяем наши ИИ-настройки к звуковой дорожке
                     if (type === 'monster') {
-                        source.playbackRate.value = 0.65; // Делаем глубокий бас
+                        source.playbackRate.value = 0.65;
                     } else if (type === 'ghost') {
-                        source.playbackRate.value = 1.35; // Делаем потусторонний свист
+                        source.playbackRate.value = 1.35;
                     } else if (type === 'echo') {
                         const delay = offlineCtx.createDelay();
                         delay.delayTime.value = 0.3;
@@ -175,15 +169,10 @@ jobs:
                     lastNode.connect(offlineCtx.destination);
                     source.start(0);
 
-                    // Рендерим измененный звук в полноценный файл
                     offlineCtx.startRendering().then(renderedBuffer => {
-                        // Переводим буфер в стандартный формат звукового файла WAV
                         finalAudioBlob = bufferToWav(renderedBuffer);
-                        
                         document.getElementById('status').innerText = "🔊 Голос обработан! Нажмите синюю кнопку ниже для сохранения.";
                         document.getElementById('saveBox').style.display = 'block';
-                        
-                        // Сразу даем прослушать результат
                         playPreview(renderedBuffer);
                     });
                 }
@@ -197,8 +186,6 @@ jobs:
 
                 function downloadAudioForCapCut() {
                     if (!finalAudioBlob) return;
-                    
-                    // Создаем временную ссылку на скачивание файла прямо в систему
                     const url = window.URL.createObjectURL(finalAudioBlob);
                     const a = document.createElement('a');
                     a.style.display = 'none';
@@ -206,14 +193,12 @@ jobs:
                     a.download = `horror_voice_${currentEffect}_${Date.now()}.wav`;
                     document.body.appendChild(a);
                     a.click();
-                    
                     setTimeout(() => {
                         window.URL.revokeObjectURL(url);
                         document.getElementById('status').innerText = "✅ Файл сохранен в папку 'Загрузки'! Откройте его в CapCut.";
                     }, 100);
                 }
 
-                // Вспомогательная функция конвертации аудио-волн в настоящий файл .WAV
                 function bufferToWav(buffer) {
                     let numOfChan = buffer.numberOfChannels,
                         length = buffer.length * numOfChan * 2 + 44,
@@ -224,3 +209,21 @@ jobs:
                         pos = 0;
 
                     function setUint16(data) { view.setUint16(pos, data, true); pos += 2; }
+                    function setUint32(data) { view.setUint32(pos, data, true); pos += 4; }
+
+                    setUint32(0x46464952); setUint32(length - 8); setUint32(0x45564157);
+                    setUint32(0x20746d66); setUint32(16); setUint16(1); setUint16(numOfChan);
+                    setUint32(buffer.sampleRate); setUint32(buffer.sampleRate * 2 * numOfChan);
+                    setUint16(numOfChan * 2); setUint16(16); setUint32(0x61746164); setUint32(length - pos - 4);
+
+                    for (i = 0; i < buffer.numberOfChannels; i++) channels.push(buffer.getChannelData(i));
+
+                    while (pos < length) {
+                        for (i = 0; i < numOfChan; i++) {
+                            sample = Math.max(-1, Math.min(1, channels[i][offset]));
+                            sample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+                            view.setInt16(pos, sample, true);
+                            pos += 2;
+                        }
+                        offset++;
+                    }
