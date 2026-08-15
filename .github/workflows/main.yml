@@ -20,21 +20,20 @@ jobs:
     - name: Install Cordova
       run: npm install -g cordova
 
-    # Шаг 2: Создаем проект и ПРИНУДИТЕЛЬНО вшиваем права для Samsung Android в config.xml
+    # Шаг 2: Создаем проект и безопасно подключаем плагины для микрофона
     - name: Create Clean Project
       run: |
         cordova create my-app com.horrorvoice.app "Horror Voice 3.0"
         cd my-app
         cordova platform add android
-        cordova plugin add cordova-plugin-android-permissions --save
         
         # Переключаем внутренний сервер на безопасный HTTPS
         sed -i 's/<content src="index.html" \/>/<content src="index.html" \/>\n    <preference name="AndroidScheme" value="https" \/>/' config.xml
         
-        # ЖЕСТКАЯ НАСТРОЙКА: Принудительно заставляем Cordova вписать требования микрофона в AndroidManifest.xml
-        sed -i 's/<\/widget>/    <platform name="android">\n        <config-file target="AndroidManifest.xml" parent="\/manifest">\n            <uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n            <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/>\n        <\/config-file>\n    <\/platform>\n<\/widget>/' config.xml
+        # НАДЕЖНЫЙ СПОСОБ: Устанавливаем плагин разрешений БЕЗ сложного редактирования XML
+        cordova plugin add cordova-plugin-android-permissions --save
 
-    # Шаг 3: Интерфейс приложения
+    # Шаг 3: Создаем интерфейс приложения со встроенной звуковой картой
     - name: Create Interface (HTML/CSS/JS)
       run: |
         cat << 'EOF' > my-app/www/index.html
@@ -145,7 +144,7 @@ jobs:
                         }, 3000);
 
                     } catch (err) {
-                        statusText.innerText = "Ошибка. Перейдите в настройки телефона и дайте доступ к микрофону.";
+                        statusText.innerText = "Включите доступ к микрофону в настройках вашего планшета.";
                     }
                 }
 
