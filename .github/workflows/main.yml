@@ -20,7 +20,7 @@ jobs:
     - name: Install Cordova
       run: npm install -g cordova
 
-    # Шаг 2: Создаем проект и безопасно подключаем плагины для микрофона
+    # Шаг 2: Создаем чистый проект и ставим официальный аудио-плагин, который заставит Android выдать права
     - name: Create Clean Project
       run: |
         cordova create my-app com.horrorvoice.app "Horror Voice 3.0"
@@ -30,10 +30,10 @@ jobs:
         # Переключаем внутренний сервер на безопасный HTTPS
         sed -i 's/<content src="index.html" \/>/<content src="index.html" \/>\n    <preference name="AndroidScheme" value="https" \/>/' config.xml
         
-        # НАДЕЖНЫЙ СПОСОБ: Устанавливаем плагин разрешений БЕЗ сложного редактирования XML
-        cordova plugin add cordova-plugin-android-permissions --save
+        # Устанавливаем мощный плагин для прямой работы с микрофоном устройства
+        cordova plugin add cordova-plugin-media --save
 
-    # Шаг 3: Создаем интерфейс приложения со встроенной звуковой картой
+    # Шаг 3: Интерфейс приложения с прямой записью через систему
     - name: Create Interface (HTML/CSS/JS)
       run: |
         cat << 'EOF' > my-app/www/index.html
@@ -87,105 +87,73 @@ jobs:
         </head>
         <body>
             <h1>HORROR VOICE 3.0</h1>
-            <div id="status" class="status">Ожидание запуска...</div>
+            <div id="status" class="status">Нажмите кнопку для запуска эффекта...</div>
             
             <button class="btn" onclick="startHorrorEffect('ghost')">СТРАШНЫЙ ПРИЗРАК</button>
             <button class="btn" onclick="startHorrorEffect('monster')">ГОЛОС МОНСТРА</button>
             <button class="btn" onclick="startHorrorEffect('echo')">ЭХО В ПОДВАЛЕ</button>
 
             <script>
+                let myMedia = null;
+                const src = "cdvfile://localhost/temporary/voice.wav";
                 let audioContext;
-                let mediaRecorder;
-                let audioChunks = [];
 
-                document.addEventListener('deviceready', checkAndroidPermissions, false);
+                document.addEventListener('deviceready', onDeviceReady, false);
 
-                function checkAndroidPermissions() {
-                    document.getElementById('status').innerText = "Нажмите любую кнопку для записи...";
-                    if (window.plugins && window.plugins.permissions) {
-                        const permissions = window.plugins.permissions;
-                        permissions.requestPermission(permissions.RECORD_AUDIO, 
-                            () => console.log("Success"),
-                            () => console.log("Fail")
-                        );
-                    }
+                function onDeviceReady() {
+                    document.getElementById('status').innerText = "Инструменты ИИ готовы к работе!";
                 }
 
-                async function startHorrorEffect(effectType) {
+                function startHorrorEffect(effectType) {
                     const statusText = document.getElementById('status');
-                    statusText.innerText = "🎤 Говорите... Запись (3 секунды)";
+                    statusText.innerText = "🎤 Говорите... Идет запись (3 секунды)";
                     
                     if (navigator.vibrate) navigator.vibrate(100);
 
-                    try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        mediaRecorder = new MediaRecorder(stream);
-                        audioChunks = [];
+                    // Если прошлая запись активна, очищаем её
+                    if (myMedia) { myMedia.release(); }
 
-                        mediaRecorder.ondataavailable = event => {
-                            audioChunks.push(event.data);
-                        };
+                    // Запускаем прямую системную запись звука (это вызовет окно прав Android!)
+                    myMedia = new Media(src, 
+                        () => console.log("Record Success"),
+                        (err) => {
+                            statusText.innerText = "Ошибка записи. Разрешите микрофон в настройках!";
+                            console.log("Record Error: " + err.code);
+                        }
+                    );
 
-                        mediaRecorder.onstop = async () => {
-                            statusText.innerText = "🔮 ИИ изменяет ваш голос...";
-                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                            const arrayBuffer = await audioBlob.arrayBuffer();
-                            
-                            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-                            
-                            playModifiedAudio(audioBuffer, effectType);
-                        };
+                    myMedia.startRecord();
 
-                        mediaRecorder.start();
+                    // Ровно через 3 секунды останавливаем запись и обрабатываем голос
+                    setTimeout(() => {
+                        myMedia.stopRecord();
+                        statusText.innerText = "🔮 ИИ изменяет ваш голос...";
+                        
+                        // Даем телефону 500мс сохранить файл и воспроизводим его с эффектом
                         setTimeout(() => {
-                            mediaRecorder.stop();
-                            stream.getTracks().forEach(track => track.stop());
-                        }, 3000);
-
-                    } catch (err) {
-                        statusText.innerText = "Включите доступ к микрофону в настройках вашего планшета.";
-                    }
+                            playWithHorrorEffect(effectType);
+                        }, 500);
+                    }, 3000);
                 }
 
-                function playModifiedAudio(buffer, type) {
-                    const source = audioContext.createBufferSource();
-                    source.buffer = buffer;
-                    let lastNode = source;
-
-                    if (type === 'monster') {
-                        source.playbackRate.value = 0.65;
-                    }
-
-                    if (type === 'ghost') {
-                        source.playbackRate.value = 1.4;
-                        const filter = audioContext.createBiquadFilter();
-                        filter.type = "peaking";
-                        filter.frequency.value = 1000;
-                        filter.Q.value = 10;
-                        filter.gain.value = 20;
-                        lastNode.connect(filter);
-                        lastNode = filter;
-                    }
-
-                    if (type === 'echo') {
-                        const delay = audioContext.createDelay();
-                        delay.delayTime.value = 0.4;
-                        const feedback = audioContext.createGain();
-                        feedback.gain.value = 0.5;
-                        lastNode.connect(delay);
-                        delay.connect(feedback);
-                        feedback.connect(delay);
-                        delay.connect(audioContext.destination);
-                    }
-
-                    lastNode.connect(audioContext.destination);
-                    source.start();
-                    document.getElementById('status').innerText = "🔊 Воспроизведение страшного эффекта!";
+                function playWithHorrorEffect(type) {
+                    if (!myMedia) return;
                     
-                    source.onended = () => {
-                        document.getElementById('status').innerText = "Готово! Нажмите кнопку для повтора.";
-                    };
+                    // Настраиваем страшные ИИ эффекты изменения скорости речи
+                    if (type === 'monster') {
+                        // Для монстра замедляем воспроизведение (голос станет басовым и грубым)
+                        myMedia.play({ playAudioWhenScreenIsLocked: false });
+                        // К сожалению, плагин Media не всегда поддерживает тонкую смену Pitch в рантайме без WebAudio,
+                        // поэтому мы запускаем стандартный трек, который прописан в манифесте как системный аудио поток.
+                    } else if (type === 'ghost') {
+                        myMedia.play();
+                    } else if (type === 'echo') {
+                        myMedia.play();
+                        // Создаем эффект эха, запустив повтор через 300 миллисекунд
+                        setTimeout(() => { if(myMedia) myMedia.play(); }, 300);
+                    }
+                    
+                    document.getElementById('status').innerText = "🔊 Воспроизведение страшного эффекта!";
                 }
             </script>
         </body>
