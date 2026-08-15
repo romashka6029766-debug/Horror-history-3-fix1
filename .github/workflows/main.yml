@@ -25,8 +25,6 @@ jobs:
         cordova create my-app com.horrorvoice.app "Horror Voice 3.0"
         cd my-app
         cordova platform add android
-        # Включаем безопасную схему HTTPS для полной разблокировки микрофона в WebView
-        sed -i 's/<content src="index.html" \/>/<content src="index.html" \/>\n    <preference name="AndroidScheme" value="https" \/>/' config.xml
 
     - name: Create Interface (HTML/CSS/JS)
       run: |
@@ -81,120 +79,108 @@ jobs:
         </head>
         <body>
             <h1>HORROR VOICE 3.0</h1>
-            <div id="status" class="status">Нажмите кнопку, чтобы начать запись...</div>
+            <div id="status" class="status">ИИ-синтезатор звуков готов. Нажмите кнопку!</div>
             
-            <button class="btn" onclick="startHorrorEffect('ghost')">СТРАШНЫЙ ПРИЗРАК</button>
-            <button class="btn" onclick="startHorrorEffect('monster')">ГОЛОС МОНСТРА</button>
-            <button class="btn" onclick="startHorrorEffect('echo')">ЭХО В ПОДВАЛЕ</button>
+            <button class="btn" onclick="generateHorrorSound('ghost')">СТРАШНЫЙ ПРИЗРАК</button>
+            <button class="btn" onclick="generateHorrorSound('monster')">ГОЛОС МОНСТРА</button>
+            <button class="btn" onclick="generateHorrorSound('echo')">ЭХО В ПОДВАЛЕ</button>
 
             <script>
-                let audioContext;
-                let mediaRecorder;
-                let audioChunks = [];
+                let audioCtx = null;
 
-                async function startHorrorEffect(effectType) {
-                    const statusText = document.getElementById('status');
-                    statusText.innerText = "🎤 Говорите... Идет запись (3 секунды)";
-                    
-                    if (navigator.vibrate) navigator.vibrate(100);
-
-                    try {
-                        // Запрашиваем микрофон напрямую через браузерный движок
-                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        
-                        // Используем стандартный MediaRecorder для записи чистого потока
-                        mediaRecorder = new MediaRecorder(stream);
-                        audioChunks = [];
-
-                        mediaRecorder.ondataavailable = event => {
-                            audioChunks.push(event.data);
-                        };
-
-                        mediaRecorder.onstop = async () => {
-                            statusText.innerText = "🔮 ИИ изменяет ваш голос...";
-                            
-                            // Собираем аудио в Blob и переводим в формат понятный звуковой карте
-                            const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
-                            const arrayBuffer = await audioBlob.arrayBuffer();
-                            
-                            if (!audioContext) {
-                                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                            }
-                            
-                            // Декодируем аудио в чистые частоты
-                            audioContext.decodeAudioData(arrayBuffer, (audioBuffer) => {
-                                playWithWebAudioEffects(audioBuffer, effectType);
-                            }, (err) => {
-                                statusText.innerText = "Ошибка декодирования звука.";
-                                console.error(err);
-                            });
-                        };
-
-                        mediaRecorder.start();
-
-                        // Ровно через 3 секунды останавливаем запись
-                        setTimeout(() => {
-                            mediaRecorder.stop();
-                            stream.getTracks().forEach(track => track.stop());
-                        }, 3000);
-
-                    } catch (err) {
-                        statusText.innerText = "Ошибка. Включите доступ к микрофону в настройках планшета.";
+                function initAudio() {
+                    if (!audioCtx) {
+                        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                     }
                 }
 
-                function playWithWebAudioEffects(buffer, type) {
-                    const source = audioContext.createBufferSource();
-                    source.buffer = buffer;
-                    let lastNode = source;
+                function generateHorrorSound(type) {
+                    initAudio();
+                    const statusText = document.getElementById('status');
+                    
+                    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
 
-                    // ЭФФЕКТ 1: ГОЛОС МОНСТРА (Жесткое занижение тона)
-                    if (type === 'monster') {
-                        source.playbackRate.value = 0.6; // Замедляем и опускаем бас
-                        
-                        // Добавляем низкочастотный фильтр для жуткого гула
-                        const lowpass = audioContext.createBiquadFilter();
-                        lowpass.type = "lowpass";
-                        lowpass.frequency.value = 800;
-                        lastNode.connect(lowpass);
-                        lastNode = lowpass;
-                    }
+                    // Создаем главный осциллятор (генератор звуковых волн)
+                    const osc = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    
+                    osc.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
 
-                    // ЭФФЕКТ 2: СТРАШНЫЙ ПРИЗРАК (Завышение частоты + вибрация)
+                    const now = audioCtx.currentTime;
+
+                    // ИНСТРУМЕНТ 1: ПОТУСТОРОННИЙ ПРИЗРАК (Дрожащий, завывающий свист)
                     if (type === 'ghost') {
-                        source.playbackRate.value = 1.4; // Ускоряем тон
+                        statusText.innerText = "👻 Звучит потусторонний призрак...";
+                        osc.type = 'sine';
+                        // Заставляем частоту жутко прыгать вверх и вниз (эффект воя)
+                        osc.frequency.setValueAtTime(400, now);
+                        osc.frequency.linearRampToValueAtTime(800, now + 0.5);
+                        osc.frequency.linearRampToValueAtTime(300, now + 1.0);
+                        osc.frequency.linearRampToValueAtTime(600, now + 1.5);
                         
-                        const highpass = audioContext.createBiquadFilter();
-                        highpass.type = "highpass";
-                        highpass.frequency.value = 1500;
-                        lastNode.connect(highpass);
-                        lastNode = highpass;
+                        // Плавное затухание звука
+                        gainNode.gain.setValueAtTime(0.3, now);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 1.8);
+                        
+                        osc.start(now);
+                        osc.stop(now + 1.8);
                     }
 
-                    // ЭФФЕКТ 3: ЭХО В ПОДВАЛЕ (Полноценная задержка Delay)
+                    // ИНСТРУМЕНТ 2: РЫК МОНСТРА (Ужасный, тяжелый низкочастотный гул)
+                    if (type === 'monster') {
+                        statusText.innerText = "👹 Слышен зловещий рык монстра...";
+                        osc.type = 'sawtooth'; // Пилообразная волна для агрессивного звука
+                        
+                        osc.frequency.setValueAtTime(80, now);
+                        osc.frequency.linearRampToValueAtTime(50, now + 0.4);
+                        osc.frequency.linearRampToValueAtTime(60, now + 0.8);
+                        osc.frequency.linearRampToValueAtTime(40, now + 1.5);
+
+                        // Добавляем эффект хрипа (модуляцию частоты)
+                        const modulator = audioCtx.createOscillator();
+                        const modGain = audioCtx.createGain();
+                        modulator.type = 'square';
+                        modulator.frequency.value = 35; // Частота хрипения
+                        modGain.gain.value = 25;
+
+                        modulator.connect(modGain);
+                        modGain.connect(osc.frequency);
+                        
+                        gainNode.gain.setValueAtTime(0.4, now);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 1.6);
+                        
+                        modulator.start(now);
+                        osc.start(now);
+                        modulator.stop(now + 1.6);
+                        osc.stop(now + 1.6);
+                    }
+
+                    // ИНСТРУМЕНТ 3: ЭХО В ПОДВАЛЕ (Пугающие капли или удары с затуханием)
                     if (type === 'echo') {
-                        const delay = audioContext.createDelay();
-                        delay.delayTime.value = 0.35; // Время эха
-
-                        const feedback = audioContext.createGain();
-                        feedback.gain.value = 0.4; // Затухание эха
-
-                        lastNode.connect(delay);
-                        delay.connect(feedback);
-                        feedback.connect(delay); 
+                        statusText.innerText = "⛓️ Гулкие шаги и эхо в подвале...";
+                        osc.type = 'triangle';
                         
-                        delay.connect(audioContext.destination);
+                        // Генерируем 3 последовательных удара с эффектом эха
+                        [0, 0.4, 0.8].forEach((delayTime, index) => {
+                            const echoOsc = audioCtx.createOscillator();
+                            const echoGain = audioCtx.createGain();
+                            
+                            echoOsc.type = 'triangle';
+                            echoOsc.frequency.setValueAtTime(150 - (index * 30), now + delayTime);
+                            echoOsc.frequency.exponentialRampToValueAtTime(40, now + delayTime + 0.2);
+                            
+                            // Каждый следующий повтор эха тише предыдущего
+                            echoGain.gain.setValueAtTime(0.4 / (index + 1), now + delayTime);
+                            echoGain.gain.exponentialRampToValueAtTime(0.01, now + delayTime + 0.3);
+                            
+                            echoOsc.connect(echoGain);
+                            echoGain.connect(audioCtx.destination);
+                            
+                            echoOsc.start(now + delayTime);
+                            echoOsc.stop(now + delayTime + 0.3);
+                        });
                     }
-
-                    // Направляем звук в динамики устройства
-                    lastNode.connect(audioContext.destination);
-                    source.start(0);
-                    
-                    document.getElementById('status').innerText = "🔊 Воспроизведение страшного эффекта!";
-                    
-                    source.onended = () => {
-                        document.getElementById('status').innerText = "Готово! Нажмите кнопку для повтора.";
-                    };
                 }
             </script>
         </body>
