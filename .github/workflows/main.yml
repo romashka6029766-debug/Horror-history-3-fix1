@@ -1,4 +1,31 @@
-    # Шаг 3: Создаем интерфейс с РЕАЛЬНЫМИ ИНСТРУМЕНТАМИ изменения голоса
+name: Build Clean Web APK (Horror Voice 3.0)
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Install Cordova
+      run: npm install -g cordova
+
+    - name: Create Clean Project
+      run: |
+        cordova create my-app com.horrorvoice.app "Horror Voice 3.0"
+        cd my-app
+        cordova platform add android
+
     - name: Create Interface (HTML/CSS/JS)
       run: |
         cat << 'EOF' > my-app/www/index.html
@@ -70,7 +97,6 @@
                     if (navigator.vibrate) navigator.vibrate(100);
 
                     try {
-                        // Запрашиваем доступ к микрофону
                         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                         mediaRecorder = new MediaRecorder(stream);
                         audioChunks = [];
@@ -87,11 +113,9 @@
                             if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
                             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
                             
-                            // Запускаем обработку звуковыми эффектами
                             playModifiedAudio(audioBuffer, effectType);
                         };
 
-                        // Записываем ровно 3 секунды голоса
                         mediaRecorder.start();
                         setTimeout(() => {
                             mediaRecorder.stop();
@@ -110,16 +134,12 @@
 
                     let lastNode = source;
 
-                    // ИНСТРУМЕНТ 1: ГОЛОС МОНСТРА (Сильное занижение частоты звука)
                     if (type === 'monster') {
-                        source.playbackRate.value = 0.65; // Делаем голос грубым и басовым
+                        source.playbackRate.value = 0.65;
                     }
 
-                    // ИНСТРУМЕНТ 2: СТРАШНЫЙ ПРИЗРАК (Завышение + искажение частоты)
                     if (type === 'ghost') {
-                        source.playbackRate.value = 1.4; // Делаем голос писклявым и загробным
-                        
-                        // Добавляем эффект дрожания (BiquadFilter)
+                        source.playbackRate.value = 1.4;
                         const filter = audioContext.createBiquadFilter();
                         filter.type = "peaking";
                         filter.frequency.value = 1000;
@@ -129,22 +149,17 @@
                         lastNode = filter;
                     }
 
-                    // ИНСТРУМЕНТ 3: ЭХО В ПОДВАЛЕ (Добавление задержки звука Delay)
                     if (type === 'echo') {
                         const delay = audioContext.createDelay();
-                        delay.delayTime.value = 0.4; // Время задержки эха
-
+                        delay.delayTime.value = 0.4;
                         const feedback = audioContext.createGain();
-                        feedback.gain.value = 0.5; // Громкость повторов эха
-
+                        feedback.gain.value = 0.5;
                         lastNode.connect(delay);
                         delay.connect(feedback);
-                        feedback.connect(delay); // Зацикливаем для повторений
-                        
+                        feedback.connect(delay);
                         delay.connect(audioContext.destination);
                     }
 
-                    // Выводим измененный звук в динамики телефона
                     lastNode.connect(audioContext.destination);
                     source.start();
                     document.getElementById('status').innerText = "🔊 Воспроизведение страшного эффекта!";
@@ -157,3 +172,20 @@
         </body>
         </html>
         EOF
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+
+    - name: Build Android APK
+      run: |
+        cd my-app
+        cordova build android --debug
+
+    - name: Upload Finished APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: horror-voice-3.0-web-apk
+        path: my-app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
