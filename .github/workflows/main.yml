@@ -48,7 +48,7 @@ jobs:
           echo "No res directory found!"
         fi
 
-    # Шаг 4: Переписываем MainActivity.kt на ультра-простой код без скрытых вызовов Android контекста
+    # Шаг 4: Переписываем MainActivity.kt
     - name: Force Overwrite MainActivity.kt with Ultra Simple Code
       run: |
         TARGET_FILE=$(find . -name "MainActivity.kt" | head -n 1)
@@ -73,6 +73,14 @@ jobs:
           echo '}' >> "$TARGET_FILE"
         else
           echo "MainActivity.kt not found!"
+        fi
+
+    # ИСПРАВЛЕНИЕ: Переписываем AndroidManifest.xml, убирая кастомные темы ИИ, чтобы избежать вылета при старте
+    - name: Force Fix Android Manifest Theme
+      run: |
+        MANIFEST_FILE=$(find . -name "AndroidManifest.xml" | head -n 1)
+        if [ -f "$MANIFEST_FILE" ]; then
+          echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://android.com"><application android:allowBackup="true" android:label="Horror Voice 3.0" android:supportsRtl="true"><activity android:name="com.example.neurovoiceoffline.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > "$MANIFEST_FILE"
         fi
 
     # Шаг 5: Настройка сборщика Gradle 8.7
