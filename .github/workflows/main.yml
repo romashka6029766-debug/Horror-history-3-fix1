@@ -25,8 +25,8 @@ jobs:
         cordova create my-app com.horrorvoice.app "Horror Voice 3.0"
         cd my-app
         cordova platform add android
+        # Включаем безопасную схему HTTPS для полной разблокировки микрофона в WebView
         sed -i 's/<content src="index.html" \/>/<content src="index.html" \/>\n    <preference name="AndroidScheme" value="https" \/>/' config.xml
-        cordova plugin add cordova-plugin-media --save
 
     - name: Create Interface (HTML/CSS/JS)
       run: |
@@ -81,70 +81,120 @@ jobs:
         </head>
         <body>
             <h1>HORROR VOICE 3.0</h1>
-            <div id="status" class="status">Нажмите кнопку для запуска эффекта...</div>
+            <div id="status" class="status">Нажмите кнопку, чтобы начать запись...</div>
             
             <button class="btn" onclick="startHorrorEffect('ghost')">СТРАШНЫЙ ПРИЗРАК</button>
             <button class="btn" onclick="startHorrorEffect('monster')">ГОЛОС МОНСТРА</button>
             <button class="btn" onclick="startHorrorEffect('echo')">ЭХО В ПОДВАЛЕ</button>
 
             <script>
-                let myMedia = null;
-                let voiceFileName = "voice.wav";
+                let audioContext;
+                let mediaRecorder;
+                let audioChunks = [];
 
-                document.addEventListener('deviceready', onDeviceReady, false);
-
-                function onDeviceReady() {
-                    document.getElementById('status').innerText = "Инструменты ИИ готовы к работе!";
-                }
-
-                function startHorrorEffect(effectType) {
+                async function startHorrorEffect(effectType) {
                     const statusText = document.getElementById('status');
                     statusText.innerText = "🎤 Говорите... Идет запись (3 секунды)";
                     
                     if (navigator.vibrate) navigator.vibrate(100);
 
-                    if (myMedia) { myMedia.release(); }
-
-                    let path = voiceFileName;
-                    if (cordova && cordova.file && cordova.file.dataDirectory) {
-                        path = cordova.file.dataDirectory + voiceFileName;
-                    }
-
-                    myMedia = new Media(path, 
-                        () => console.log("Record Success"),
-                        (err) => {
-                            statusText.innerText = "Ошибка записи.";
-                            console.log("Record Error: " + JSON.stringify(err));
-                        }
-                    );
-
-                    myMedia.startRecord();
-
-                    setTimeout(() => {
-                        myMedia.stopRecord();
-                        statusText.innerText = "🔮 ИИ изменяет ваш голос...";
+                    try {
+                        // Запрашиваем микрофон напрямую через браузерный движок
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                         
+                        // Используем стандартный MediaRecorder для записи чистого потока
+                        mediaRecorder = new MediaRecorder(stream);
+                        audioChunks = [];
+
+                        mediaRecorder.ondataavailable = event => {
+                            audioChunks.push(event.data);
+                        };
+
+                        mediaRecorder.onstop = async () => {
+                            statusText.innerText = "🔮 ИИ изменяет ваш голос...";
+                            
+                            // Собираем аудио в Blob и переводим в формат понятный звуковой карте
+                            const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+                            const arrayBuffer = await audioBlob.arrayBuffer();
+                            
+                            if (!audioContext) {
+                                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            }
+                            
+                            // Декодируем аудио в чистые частоты
+                            audioContext.decodeAudioData(arrayBuffer, (audioBuffer) => {
+                                playWithWebAudioEffects(audioBuffer, effectType);
+                            }, (err) => {
+                                statusText.innerText = "Ошибка декодирования звука.";
+                                console.error(err);
+                            });
+                        };
+
+                        mediaRecorder.start();
+
+                        // Ровно через 3 секунды останавливаем запись
                         setTimeout(() => {
-                            playWithHorrorEffect(effectType);
-                        }, 500);
-                    }, 3000);
+                            mediaRecorder.stop();
+                            stream.getTracks().forEach(track => track.stop());
+                        }, 3000);
+
+                    } catch (err) {
+                        statusText.innerText = "Ошибка. Включите доступ к микрофону в настройках планшета.";
+                    }
                 }
 
-                function playWithHorrorEffect(type) {
-                    if (!myMedia) return;
-                    
+                function playWithWebAudioEffects(buffer, type) {
+                    const source = audioContext.createBufferSource();
+                    source.buffer = buffer;
+                    let lastNode = source;
+
+                    // ЭФФЕКТ 1: ГОЛОС МОНСТРА (Жесткое занижение тона)
                     if (type === 'monster') {
-                        myMedia.play();
-                        setTimeout(() => { if(myMedia) myMedia.play(); }, 50);
-                    } else if (type === 'ghost') {
-                        myMedia.play();
-                    } else if (type === 'echo') {
-                        myMedia.play();
-                        setTimeout(() => { if(myMedia) myMedia.play(); }, 300);
-                        setTimeout(() => { if(myMedia) myMedia.play(); }, 600);
+                        source.playbackRate.value = 0.6; // Замедляем и опускаем бас
+                        
+                        // Добавляем низкочастотный фильтр для жуткого гула
+                        const lowpass = audioContext.createBiquadFilter();
+                        lowpass.type = "lowpass";
+                        lowpass.frequency.value = 800;
+                        lastNode.connect(lowpass);
+                        lastNode = lowpass;
                     }
+
+                    // ЭФФЕКТ 2: СТРАШНЫЙ ПРИЗРАК (Завышение частоты + вибрация)
+                    if (type === 'ghost') {
+                        source.playbackRate.value = 1.4; // Ускоряем тон
+                        
+                        const highpass = audioContext.createBiquadFilter();
+                        highpass.type = "highpass";
+                        highpass.frequency.value = 1500;
+                        lastNode.connect(highpass);
+                        lastNode = highpass;
+                    }
+
+                    // ЭФФЕКТ 3: ЭХО В ПОДВАЛЕ (Полноценная задержка Delay)
+                    if (type === 'echo') {
+                        const delay = audioContext.createDelay();
+                        delay.delayTime.value = 0.35; // Время эха
+
+                        const feedback = audioContext.createGain();
+                        feedback.gain.value = 0.4; // Затухание эха
+
+                        lastNode.connect(delay);
+                        delay.connect(feedback);
+                        feedback.connect(delay); 
+                        
+                        delay.connect(audioContext.destination);
+                    }
+
+                    // Направляем звук в динамики устройства
+                    lastNode.connect(audioContext.destination);
+                    source.start(0);
                     
                     document.getElementById('status').innerText = "🔊 Воспроизведение страшного эффекта!";
+                    
+                    source.onended = () => {
+                        document.getElementById('status').innerText = "Готово! Нажмите кнопку для повтора.";
+                    };
                 }
             </script>
         </body>
