@@ -1,34 +1,4 @@
-name: Build Clean Web APK (Horror Voice 3.0)
-
-on:
-  push:
-    branches: [ "main" ]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-
-    # Шаг 1: Устанавливаем чистый упаковщик Cordova
-    - name: Install Cordova
-      run: npm install -g cordova
-
-    # Шаг 2: Создаем абсолютно новый, чистый проект Android без багов ИИ
-    - name: Create Clean Project
-      run: |
-        cordova create my-app com.horrorvoice.app "Horror Voice 3.0"
-        cd my-app
-        cordova platform add android
-
-    # Шаг 3: Создаем красивый страшный дизайн приложения на HTML/CSS
+    # Шаг 3: Создаем интерфейс с РЕАЛЬНЫМИ ИНСТРУМЕНТАМИ изменения голоса
     - name: Create Interface (HTML/CSS/JS)
       run: |
         cat << 'EOF' > my-app/www/index.html
@@ -51,7 +21,12 @@ jobs:
                     font-size: 32px;
                     text-shadow: 0px 0px 10px #ff0000;
                     margin-top: 50px;
-                    margin-bottom: 50px;
+                    margin-bottom: 30px;
+                }
+                .status {
+                    color: #888;
+                    font-size: 14px;
+                    margin-bottom: 30px;
                 }
                 .btn {
                     background: #1a1a1a;
@@ -77,40 +52,108 @@ jobs:
         </head>
         <body>
             <h1>HORROR VOICE 3.0</h1>
+            <div id="status" class="status">Нажмите любую кнопку, чтобы начать запись...</div>
             
-            <button class="btn" onclick="playEffect('Призрак')">СТРАШНЫЙ ПРИЗРАК</button>
-            <button class="btn" onclick="playEffect('Монстр')">ГОЛОС МОНСТРА</button>
-            <button class="btn" onclick="playEffect('Эхо')">ЭХО В ПОДВАЛЕ</button>
+            <button class="btn" onclick="startHorrorEffect('ghost')">СТРАШНЫЙ ПРИЗРАК</button>
+            <button class="btn" onclick="startHorrorEffect('monster')">ГОЛОС МОНСТРА</button>
+            <button class="btn" onclick="startHorrorEffect('echo')">ЭХО В ПОДВАЛЕ</button>
 
             <script>
-                function playEffect(name) {
-                    // Симулируем страшный звук стандартным сигналом телефона
-                    if(navigator.vibrate) {
-                        navigator.vibrate([200, 100, 200]); // Телефон страшно завибрирует при нажатии
+                let audioContext;
+                let mediaRecorder;
+                let audioChunks = [];
+
+                async function startHorrorEffect(effectType) {
+                    const statusText = document.getElementById('status');
+                    statusText.innerText = "🎤 Говорите... Запись голоса (3 секунды)";
+                    
+                    if (navigator.vibrate) navigator.vibrate(100);
+
+                    try {
+                        // Запрашиваем доступ к микрофону
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        mediaRecorder = new MediaRecorder(stream);
+                        audioChunks = [];
+
+                        mediaRecorder.ondataavailable = event => {
+                            audioChunks.push(event.data);
+                        };
+
+                        mediaRecorder.onstop = async () => {
+                            statusText.innerText = "🔮 ИИ изменяет ваш голос...";
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                            const arrayBuffer = await audioBlob.arrayBuffer();
+                            
+                            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+                            
+                            // Запускаем обработку звуковыми эффектами
+                            playModifiedAudio(audioBuffer, effectType);
+                        };
+
+                        // Записываем ровно 3 секунды голоса
+                        mediaRecorder.start();
+                        setTimeout(() => {
+                            mediaRecorder.stop();
+                            stream.getTracks().forEach(track => track.stop());
+                        }, 3000);
+
+                    } catch (err) {
+                        alert("Ошибка доступа к микрофону. Разрешите запись звука в настройках приложения!");
+                        statusText.innerText = "Ошибка запуска инструментов.";
                     }
-                    alert("Эффект [" + name + "] успешно запущен!");
+                }
+
+                function playModifiedAudio(buffer, type) {
+                    const source = audioContext.createBufferSource();
+                    source.buffer = buffer;
+
+                    let lastNode = source;
+
+                    // ИНСТРУМЕНТ 1: ГОЛОС МОНСТРА (Сильное занижение частоты звука)
+                    if (type === 'monster') {
+                        source.playbackRate.value = 0.65; // Делаем голос грубым и басовым
+                    }
+
+                    // ИНСТРУМЕНТ 2: СТРАШНЫЙ ПРИЗРАК (Завышение + искажение частоты)
+                    if (type === 'ghost') {
+                        source.playbackRate.value = 1.4; // Делаем голос писклявым и загробным
+                        
+                        // Добавляем эффект дрожания (BiquadFilter)
+                        const filter = audioContext.createBiquadFilter();
+                        filter.type = "peaking";
+                        filter.frequency.value = 1000;
+                        filter.Q.value = 10;
+                        filter.gain.value = 20;
+                        lastNode.connect(filter);
+                        lastNode = filter;
+                    }
+
+                    // ИНСТРУМЕНТ 3: ЭХО В ПОДВАЛЕ (Добавление задержки звука Delay)
+                    if (type === 'echo') {
+                        const delay = audioContext.createDelay();
+                        delay.delayTime.value = 0.4; // Время задержки эха
+
+                        const feedback = audioContext.createGain();
+                        feedback.gain.value = 0.5; // Громкость повторов эха
+
+                        lastNode.connect(delay);
+                        delay.connect(feedback);
+                        feedback.connect(delay); // Зацикливаем для повторений
+                        
+                        delay.connect(audioContext.destination);
+                    }
+
+                    // Выводим измененный звук в динамики телефона
+                    lastNode.connect(audioContext.destination);
+                    source.start();
+                    document.getElementById('status').innerText = "🔊 Воспроизведение страшного эффекта!";
+                    
+                    source.onended = () => {
+                        document.getElementById('status').innerText = "Готово! Нажмите кнопку, чтобы повторить.";
+                    };
                 }
             </script>
         </body>
         </html>
         EOF
-
-    # Шаг 4: Настраиваем Java для сборки веб-оболочки
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '17'
-
-    # Шаг 5: Компилируем чистый APK без единой ошибки Gradle
-    - name: Build Android APK
-      run: |
-        cd my-app
-        cordova build android --debug
-
-    # Шаг 6: Сохраняем готовый файл для скачивания
-    - name: Upload Finished APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: horror-voice-3.0-web-apk
-        path: my-app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
