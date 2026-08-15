@@ -12,10 +12,11 @@ jobs:
     - name: Checkout Source Code
       uses: actions/checkout@v4
 
+    # Обновляем Node.js до актуальной 22-й версии, чтобы убрать ошибку deprecated
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version: 22
 
     - name: Install Cordova
       run: npm install -g cordova
@@ -225,5 +226,3 @@ jobs:
                             view.setInt16(pos, sample, true);
                             pos += 2;
                         }
-                        offset++;
-                    }
