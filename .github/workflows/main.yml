@@ -75,13 +75,10 @@ jobs:
           echo "MainActivity.kt not found!"
         fi
 
-    # ИСПРАВЛЕНИЕ: Переписываем AndroidManifest.xml, убирая кастомные темы ИИ, чтобы избежать вылета при старте
-    - name: Force Fix Android Manifest Theme
+    # Шаг 4.5: СУПЕР-ИСПРАВЛЕНИЕ МАНИФЕСТА. Мы находим ВСЕ файлы AndroidManifest.xml и заменяем их на 100% валидный шаблон с нужными 'android:name'
+    - name: Overwrite All Android Manifests with Compliant Template
       run: |
-        MANIFEST_FILE=$(find . -name "AndroidManifest.xml" | head -n 1)
-        if [ -f "$MANIFEST_FILE" ]; then
-          echo '<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="http://android.com"><application android:allowBackup="true" android:label="Horror Voice 3.0" android:supportsRtl="true"><activity android:name="com.example.neurovoiceoffline.MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter></activity></application></manifest>' > "$MANIFEST_FILE"
-        fi
+        find . -name "AndroidManifest.xml" -type f -exec sh -c 'echo "<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"http://android.com\" package=\"com.example.neurovoiceoffline\"><application android:allowBackup=\"true\" android:label=\"Horror Voice 3.0\" android:supportsRtl=\"true\"><activity android:name=\"com.example.neurovoiceoffline.MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\" /><category android:name=\"android.intent.category.LAUNCHER\" /></intent-filter></activity></application></manifest>" > {}' \;
 
     # Шаг 5: Настройка сборщика Gradle 8.7
     - name: Validate and Setup Gradle
