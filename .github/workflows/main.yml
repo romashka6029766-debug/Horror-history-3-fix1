@@ -20,7 +20,7 @@ jobs:
     - name: Install Cordova
       run: npm install -g cordova
 
-    # Шаг 2: Создаем проект, добавляем плагины и настраиваем безопасный протокол HTTPS
+    # Шаг 2: Создаем проект и ПРИНУДИТЕЛЬНО вшиваем права для Samsung Android в config.xml
     - name: Create Clean Project
       run: |
         cordova create my-app com.horrorvoice.app "Horror Voice 3.0"
@@ -28,8 +28,11 @@ jobs:
         cordova platform add android
         cordova plugin add cordova-plugin-android-permissions --save
         
-        # МАГИЧЕСКАЯ СТРОКА: Встраиваем в конфиг принудительное использование HTTPS для работы микрофона
+        # Переключаем внутренний сервер на безопасный HTTPS
         sed -i 's/<content src="index.html" \/>/<content src="index.html" \/>\n    <preference name="AndroidScheme" value="https" \/>/' config.xml
+        
+        # ЖЕСТКАЯ НАСТРОЙКА: Принудительно заставляем Cordova вписать требования микрофона в AndroidManifest.xml
+        sed -i 's/<\/widget>/    <platform name="android">\n        <config-file target="AndroidManifest.xml" parent="\/manifest">\n            <uses-permission android:name="android.permission.RECORD_AUDIO" \/>\n            <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" \/>\n        <\/config-file>\n    <\/platform>\n<\/widget>/' config.xml
 
     # Шаг 3: Интерфейс приложения
     - name: Create Interface (HTML/CSS/JS)
@@ -103,8 +106,8 @@ jobs:
                     if (window.plugins && window.plugins.permissions) {
                         const permissions = window.plugins.permissions;
                         permissions.requestPermission(permissions.RECORD_AUDIO, 
-                            () => console.log("Доступ к микрофону получен в манифесте"),
-                            () => console.log("Доступ отклонен в манифесте")
+                            () => console.log("Success"),
+                            () => console.log("Fail")
                         );
                     }
                 }
@@ -142,7 +145,7 @@ jobs:
                         }, 3000);
 
                     } catch (err) {
-                        statusText.innerText = "Ошибка доступа. Дайте приложению права на микрофон в настройках Android.";
+                        statusText.innerText = "Ошибка. Перейдите в настройки телефона и дайте доступ к микрофону.";
                     }
                 }
 
