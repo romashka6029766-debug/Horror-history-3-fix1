@@ -25,6 +25,8 @@ jobs:
         cordova create my-app com.horrorvoice.app "Horror Voice 3.0"
         cd my-app
         cordova platform add android
+        cordova plugin add cordova-plugin-media-capture --save
+
 
     - name: Create Interface (HTML/CSS/JS)
       run: |
