@@ -20,14 +20,16 @@ jobs:
     - name: Install Cordova
       run: npm install -g cordova
 
+    # Шаг 2: Создаем проект и добавляем плагин для глубокого доступа к микрофону Android
     - name: Create Clean Project
       run: |
         cordova create my-app com.horrorvoice.app "Horror Voice 3.0"
         cd my-app
         cordova platform add android
-        cordova plugin add cordova-plugin-media-capture --save
+        # Устанавливаем плагин, который пропишет микрофон в манифест Android
+        cordova plugin add cordova-plugin-android-permissions --save
 
-
+    # Шаг 3: Обновленный интерфейс с автоматическим системным запросом прав
     - name: Create Interface (HTML/CSS/JS)
       run: |
         cat << 'EOF' > my-app/www/index.html
@@ -81,7 +83,7 @@ jobs:
         </head>
         <body>
             <h1>HORROR VOICE 3.0</h1>
-            <div id="status" class="status">Нажмите любую кнопку, чтобы начать запись...</div>
+            <div id="status" class="status">Ожидание запуска...</div>
             
             <button class="btn" onclick="startHorrorEffect('ghost')">СТРАШНЫЙ ПРИЗРАК</button>
             <button class="btn" onclick="startHorrorEffect('monster')">ГОЛОС МОНСТРА</button>
@@ -92,9 +94,23 @@ jobs:
                 let mediaRecorder;
                 let audioChunks = [];
 
+                // Вызываем проверку прав при старте приложения
+                document.addEventListener('deviceready', checkAndroidPermissions, false);
+
+                function checkAndroidPermissions() {
+                    document.getElementById('status').innerText = "Нажмите любую кнопку для записи...";
+                    if (window.plugins && window.plugins.permissions) {
+                        const permissions = window.plugins.permissions;
+                        permissions.requestPermission(permissions.RECORD_AUDIO, 
+                            () => console.log("Доступ к микрофону получен"),
+                            () => alert("Пожалуйста, разрешите доступ к микрофону для работы эффектов!")
+                        );
+                    }
+                }
+
                 async function startHorrorEffect(effectType) {
                     const statusText = document.getElementById('status');
-                    statusText.innerText = "🎤 Говорите... Запись голоса (3 секунды)";
+                    statusText.innerText = "🎤 Говорите... Запись (3 секунды)";
                     
                     if (navigator.vibrate) navigator.vibrate(100);
 
@@ -125,15 +141,15 @@ jobs:
                         }, 3000);
 
                     } catch (err) {
-                        alert("Ошибка доступа к микрофону. Разрешите запись звука в настройках приложения!");
-                        statusText.innerText = "Ошибка запуска инструментов.";
+                        // Если Cordova не успела выдать права, пробуем запросить их заново
+                        checkAndroidPermissions();
+                        statusText.innerText = "Ошибка доступа. Попробуйте еще раз.";
                     }
                 }
 
                 function playModifiedAudio(buffer, type) {
                     const source = audioContext.createBufferSource();
                     source.buffer = buffer;
-
                     let lastNode = source;
 
                     if (type === 'monster') {
@@ -167,7 +183,7 @@ jobs:
                     document.getElementById('status').innerText = "🔊 Воспроизведение страшного эффекта!";
                     
                     source.onended = () => {
-                        document.getElementById('status').innerText = "Готово! Нажмите кнопку, чтобы повторить.";
+                        document.getElementById('status').innerText = "Готово! Нажмите кнопку для повтора.";
                     };
                 }
             </script>
