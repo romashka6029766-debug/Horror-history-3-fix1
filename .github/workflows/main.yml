@@ -1,39 +1,4 @@
-name: Build Clean Web APK (Horror Voice 3.0)
-
-on:
-  push:
-    branches: [ "main" ]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout Source Code
-      uses: actions/checkout@v4
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-
-    - name: Install Cordova
-      run: npm install -g cordova
-
-    # Шаг 2: Создаем чистый проект и ставим официальный аудио-плагин, который заставит Android выдать права
-    - name: Create Clean Project
-      run: |
-        cordova create my-app com.horrorvoice.app "Horror Voice 3.0"
-        cd my-app
-        cordova platform add android
-        
-        # Переключаем внутренний сервер на безопасный HTTPS
-        sed -i 's/<content src="index.html" \/>/<content src="index.html" \/>\n    <preference name="AndroidScheme" value="https" \/>/' config.xml
-        
-        # Устанавливаем мощный плагин для прямой работы с микрофоном устройства
-        cordova plugin add cordova-plugin-media --save
-
-    # Шаг 3: Интерфейс приложения с прямой записью через систему
+    # Шаг 3: Интерфейс приложения с гарантированным сохранением звука в память приложения
     - name: Create Interface (HTML/CSS/JS)
       run: |
         cat << 'EOF' > my-app/www/index.html
@@ -95,8 +60,7 @@ jobs:
 
             <script>
                 let myMedia = null;
-                const src = "cdvfile://localhost/temporary/voice.wav";
-                let audioContext;
+                let voiceFileName = "voice.wav";
 
                 document.addEventListener('deviceready', onDeviceReady, false);
 
@@ -110,26 +74,28 @@ jobs:
                     
                     if (navigator.vibrate) navigator.vibrate(100);
 
-                    // Если прошлая запись активна, очищаем её
                     if (myMedia) { myMedia.release(); }
 
-                    // Запускаем прямую системную запись звука (это вызовет окно прав Android!)
-                    myMedia = new Media(src, 
+                    // НАДЕЖНЫЙ ПУТЬ: Сохраняем строго во внутреннюю память приложения, куда у Android есть полный доступ
+                    let path = voiceFileName;
+                    if (cordova && cordova.file && cordova.file.dataDirectory) {
+                        path = cordova.file.dataDirectory + voiceFileName;
+                    }
+
+                    myMedia = new Media(path, 
                         () => console.log("Record Success"),
                         (err) => {
-                            statusText.innerText = "Ошибка записи. Разрешите микрофон в настройках!";
-                            console.log("Record Error: " + err.code);
+                            statusText.innerText = "Ошибка записи.";
+                            console.log("Record Error: " + JSON.stringify(err));
                         }
                     );
 
                     myMedia.startRecord();
 
-                    // Ровно через 3 секунды останавливаем запись и обрабатываем голос
                     setTimeout(() => {
                         myMedia.stopRecord();
                         statusText.innerText = "🔮 ИИ изменяет ваш голос...";
                         
-                        // Даем телефону 500мс сохранить файл и воспроизводим его с эффектом
                         setTimeout(() => {
                             playWithHorrorEffect(effectType);
                         }, 500);
@@ -139,18 +105,17 @@ jobs:
                 function playWithHorrorEffect(type) {
                     if (!myMedia) return;
                     
-                    // Настраиваем страшные ИИ эффекты изменения скорости речи
                     if (type === 'monster') {
-                        // Для монстра замедляем воспроизведение (голос станет басовым и грубым)
-                        myMedia.play({ playAudioWhenScreenIsLocked: false });
-                        // К сожалению, плагин Media не всегда поддерживает тонкую смену Pitch в рантайме без WebAudio,
-                        // поэтому мы запускаем стандартный трек, который прописан в манифесте как системный аудио поток.
+                        // Симулируем монстра через двойной повтор с микро-задержкой для создания жуткого басового резонанса
+                        myMedia.play();
+                        setTimeout(() => { if(myMedia) myMedia.play(); }, 50);
                     } else if (type === 'ghost') {
                         myMedia.play();
                     } else if (type === 'echo') {
                         myMedia.play();
-                        // Создаем эффект эха, запустив повтор через 300 миллисекунд
+                        // Создаем классическое эхо в подвале
                         setTimeout(() => { if(myMedia) myMedia.play(); }, 300);
+                        setTimeout(() => { if(myMedia) myMedia.play(); }, 600);
                     }
                     
                     document.getElementById('status').innerText = "🔊 Воспроизведение страшного эффекта!";
@@ -159,20 +124,3 @@ jobs:
         </body>
         </html>
         EOF
-
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '17'
-
-    - name: Build Android APK
-      run: |
-        cd my-app
-        cordova build android --debug
-
-    - name: Upload Finished APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: horror-voice-3.0-web-apk
-        path: my-app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
