@@ -37,7 +37,7 @@ jobs:
         echo "Found project directory at: $PROJECT_DIR"
         echo "dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
 
-    # Шаг 3: Принудительно создаем стабильный и простой XML-интерфейс
+    # Шаг 3: Создаем стабильный XML-интерфейс (Ошибка match_match исправлена на match_parent)
     - name: Force Create Standard XML Layout
       run: |
         RES_DIR=$(find . -name "res" -type d | head -n 1)
@@ -46,7 +46,7 @@ jobs:
           cat << 'EOF' > "$RES_DIR/layout/activity_main.xml"
           <?xml version="1.0" encoding="utf-8"?>
           <LinearLayout xmlns:android="http://android.com"
-              android:layout_width="match_match"
+              android:layout_width="match_parent"
               android:layout_height="match_parent"
               android:orientation="vertical"
               android:gravity="center"
@@ -66,23 +66,28 @@ jobs:
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
                   android:text="Страшный призрак"
-                  android:layout_marginVertical="8dp"/>
+                  android:layout_marginTop="8dp"
+                  android:layout_marginBottom="8dp"/>
 
               <Button
                   android:id="@+id/btn2"
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
                   android:text="Голос монстра"
-                  android:layout_marginVertical="8dp"/>
+                  android:layout_marginTop="8dp"
+                  android:layout_marginBottom="8dp"/>
 
               <Button
                   android:id="@+id/btn3"
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
                   android:text="Эхо в подвале"
-                  android:layout_marginVertical="8dp"/>
+                  android:layout_marginTop="8dp"
+                  android:layout_marginBottom="8dp"/>
           </LinearLayout>
           EOF
+        else
+          echo "No res directory found!"
         fi
 
     # Шаг 4: Переписываем MainActivity.kt на классический рабочий лад
@@ -102,7 +107,6 @@ jobs:
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState: Bundle?)
                   
-                  // Проверяем наличие ресурсов разметки, иначе ставим пустой экран
                   try {
                       val layoutId = resources.getIdentifier("activity_main", "layout", packageName)
                       if (layoutId != 0) {
@@ -123,6 +127,8 @@ jobs:
               }
           }
           EOF
+        else
+          echo "MainActivity.kt not found!"
         fi
 
     # Шаг 5: Настройка сборщика Gradle 8.7
